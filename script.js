@@ -124,7 +124,25 @@ function animateCounters() {
     const counters = document.querySelectorAll('.card-value, .highlight-value, .stat-number');
     
     counters.forEach(counter => {
-        const target = parseFloat(counter.textContent.replace(/[^\d.]/g, ''));
+        const originalText = counter.textContent;
+        let valueToParse = originalText.replace(/[^\d,.]/g, ''); // Keep only digits, commas, dots
+
+        let numericValue;
+        // Determine if the number uses comma as decimal separator (pt-BR format)
+        if (valueToParse.includes(',')) {
+            // If it contains a comma, assume it's the decimal separator and dots are thousands separators
+            valueToParse = valueToParse.replace(/\./g, ''); // Remove thousands separators (dots)
+            valueToParse = valueToParse.replace(/,/g, '.'); // Replace decimal comma with dot
+            numericValue = parseFloat(valueToParse);
+        } else if (valueToParse.includes('.')) {
+            // If it contains a dot but no comma, assume dot is a thousands separator (e.g., "39.053" meaning 39053)
+            valueToParse = valueToParse.replace(/\./g, ''); // Remove thousands separators (dots)
+            numericValue = parseFloat(valueToParse);
+        } else {
+            // No dots or commas, just digits (e.g., "35079")
+            numericValue = parseFloat(valueToParse);
+        }
+        const target = numericValue;
         if (target > 0) {
             let current = 0;
             const increment = target / 100;
@@ -135,21 +153,38 @@ function animateCounters() {
                     clearInterval(timer);
                 }
                 
-                // Format the number appropriately
-                const originalText = counter.textContent;
-                const numericPart = current.toLocaleString('pt-BR', {
-                    minimumFractionDigits: originalText.includes(',') ? 2 : 0,
-                    maximumFractionDigits: originalText.includes(',') ? 2 : 0
-                });
+                let formattedValue;
+                if (originalText.includes(',')) {
+                    // If the original text had a comma, it likely had decimal places.
+                    // Try to infer the number of decimal places from the original text.
+                    const decimalPart = originalText.split(',')[1];
+                    const numDecimals = decimalPart ? decimalPart.replace(/[^0-9]/g, '').length : 0;
+                    formattedValue = current.toLocaleString('pt-BR', {
+                        minimumFractionDigits: numDecimals,
+                        maximumFractionDigits: numDecimals
+                    });
+                } else if (originalText.includes('km²') || originalText.includes('pessoas') || originalText.includes('habitantes') || originalText.includes('estudantes')) {
+                    // For values that are typically integers (like population, area in km²), ensure no decimal places.
+                    formattedValue = Math.round(current).toLocaleString('pt-BR', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                    });
+                } else {
+                    // Default formatting for other numbers, allowing up to 3 decimal places if needed.
+                    formattedValue = current.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 3
+                    });
+                }
                 
                 if (originalText.includes('R$')) {
-                    counter.textContent = `R$ ${numericPart}`;
+                    counter.textContent = `R$ ${formattedValue}`;
                 } else if (originalText.includes('%')) {
-                    counter.textContent = `${numericPart}%`;
+                    counter.textContent = `${formattedValue}%`;
                 } else if (originalText.includes('km²')) {
-                    counter.textContent = `${numericPart} km²`;
+                    counter.textContent = `${formattedValue} km²`;
                 } else {
-                    counter.textContent = numericPart;
+                    counter.textContent = formattedValue;
                 }
             }, 20);
         }
@@ -238,3 +273,91 @@ rippleStyle.textContent = `
     }
 `;
 document.head.appendChild(rippleStyle);
+
+// Interactive Map Initialization
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if the map container exists on the page
+    if (document.getElementById('map')) {
+        // Coordinates for Pimenta Bueno, RO
+        const pimentaBuenoCoords = [-11.673, -61.702];
+
+        // Initialize the map and set its view
+        const map = L.map('map').setView(pimentaBuenoCoords, 13);
+
+        // Add a tile layer to the map (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add a marker for Pimenta Bueno
+        L.marker(pimentaBuenoCoords).addTo(map)
+            .bindPopup('<b>Pimenta Bueno, RO</b><br>O coração da Amazônia Rondoniense.')
+            .openPopup();
+    }
+});
+
+// Gallery Modal Logic
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById("galleryModal");
+    if (!modal) return;
+
+    const modalImg = document.getElementById("modalImage");
+    const captionText = document.getElementById("caption");
+    const galleryImages = document.querySelectorAll(".photo-grid img");
+    let currentIndex;
+
+    galleryImages.forEach(img => {
+        // Add click listener to the parent container (.photo-item)
+        img.parentElement.onclick = function(){
+            modal.style.display = "block";
+            modalImg.src = img.src;
+            captionText.innerHTML = img.alt;
+            currentIndex = parseInt(img.dataset.index);
+        }
+    });
+
+    const closeModal = () => {
+        modal.style.display = "none";
+    }
+
+    const span = document.getElementsByClassName("close-modal")[0];
+    if (span) {
+        span.onclick = closeModal;
+    }
+
+    const showImage = (index) => {
+        if (index >= galleryImages.length) { 
+            currentIndex = 0; 
+        } else if (index < 0) { 
+            currentIndex = galleryImages.length - 1; 
+        } else {
+            currentIndex = index;
+        }
+        const newImg = galleryImages[currentIndex];
+        modalImg.src = newImg.src;
+        captionText.innerHTML = newImg.alt;
+    }
+
+    const prev = document.querySelector(".prev-modal");
+    if (prev) {
+        prev.onclick = () => showImage(currentIndex - 1);
+    }
+
+    const next = document.querySelector(".next-modal");
+    if (next) {
+        next.onclick = () => showImage(currentIndex + 1);
+    }
+    
+    // Close with Escape key and navigate with arrows
+    document.addEventListener('keydown', (e) => {
+        if (modal.style.display === "block") {
+            if (e.key === "Escape") {
+                closeModal();
+            } else if (e.key === "ArrowLeft") {
+                showImage(currentIndex - 1);
+            } else if (e.key === "ArrowRight") {
+                showImage(currentIndex + 1);
+            }
+        }
+    });
+});
