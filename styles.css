@@ -428,7 +428,8 @@ body {
     margin-bottom: 1rem;
 }
 
-.card-value {
+.card-value,
+.card-static-value {
     font-size: 2rem;
     font-weight: 700;
     color: var(--foreground);
